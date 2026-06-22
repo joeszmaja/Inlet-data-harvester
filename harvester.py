@@ -87,4 +87,12 @@ def generate_leaflet_map(csv_filename):
         f.write(html_content)
 
 if __name__ == "__main__":
-    asyncio.run(connect_ais())
+    try:
+        # This will force the entire script to stop after 60 seconds, 
+        # even if the WebSocket is still hanging.
+        asyncio.run(asyncio.wait_for(connect_ais(), timeout=60))
+    except asyncio.TimeoutError:
+        print("Script reached hard time limit and forced exit.")
+        # This allows the script to continue to the map generation step
+        # instead of killing the entire process.
+        pass
