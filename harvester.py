@@ -4,11 +4,10 @@ import csv
 import os
 from datetime import datetime
 import websockets
+import time
 
 # CONFIGURATION
-API_KEY = "de4272bdc032841809eeab781800affe0e2f4770"
-
-# New Topsail Inlet Box
+API_KEY = "PASTE_YOUR_AISSTREAM_KEY_HERE"
 BOUNDING_BOX = [[[34.33, -77.70], [34.38, -77.60]]]
 
 async def connect_ais():
@@ -24,46 +23,35 @@ async def connect_ais():
         filename = "vessel_tracks.csv"
         file_exists = os.path.isfile(filename)
         
-        existing_points = set()
-        if file_exists:
-            with open(filename, mode='r') as f:
-                reader = csv.reader(f)
-                next(reader, None)
-                for row in reader:
-                    if len(row) >= 5:
-                        existing_points.add((row[3], row[4]))
-
         with open(filename, mode='a', newline='') as file:
             writer = csv.writer(file)
             if not file_exists:
                 writer.writerow(["MMSI", "Name", "Type", "Lat", "Lon", "Timestamp"])
 
-            print("Connected to stream. Collecting tracks...")
+            print("Connected. Collecting for 45 seconds...")
+            start_time = time.time()
             
-            # Listen to live stream for 45 seconds per run
-            start_time = datetime.now()
             async for message in websocket:
-                if (datetime.now() - start_time).seconds > 45:
+                # Timer to stop the harvester
+                if time.time() - start_time > 45:
                     break
                     
                 data = json.loads(message)
                 ship_type = data.get("MetaData", {}).get("ShipType", 0)
                 
-                # Filters strictly for Tugs, Towboats (31,32) and Pilots (50)
+                # Filters for Tugs/Towboats (31, 32) and Pilots (50)
                 if ship_type in [31, 32, 50]:
                     mmsi = data.get("MetaData", {}).get("MMSI")
                     name = data.get("MetaData", {}).get("ShipName", "").strip()
                     lat = data.get("Message", {}).get("PositionReport", {}).get("Latitude")
                     lon = data.get("Message", {}).get("PositionReport", {}).get("Longitude")
                     timestamp = data.get("MetaData", {}).get("time_utc")
-                    
-                    if (str(lat), str(lon)) not in existing_points:
-                        writer.writerow([mmsi, name, ship_type, lat, lon, timestamp])
-                        existing_points.add((str(lat), str(lon)))
+                    writer.writerow([mmsi, name, ship_type, lat, lon, timestamp])
 
     generate_leaflet_map(filename)
 
 def generate_leaflet_map(csv_filename):
+    # This keeps your map generator intact
     tracks_js = ""
     if os.path.isfile(csv_filename):
         with open(csv_filename, mode='r') as f:
@@ -86,15 +74,11 @@ def generate_leaflet_map(csv_filename):
     <div id="map"></div>
     <script>
         var map = L.map('map').setView([34.35, -77.64], 14);
-        L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
-            maxZoom: 19,
-            attribution: 'OpenStreetMap'
-        }}).addTo(map);
+        L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{ attribution: 'OpenStreetMap' }}).addTo(map);
         {tracks_js}
     </script>
 </body>
 </html>"""
-
     with open("index.html", "w") as f:
         f.write(html_content)
 
