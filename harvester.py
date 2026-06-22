@@ -7,7 +7,7 @@ import websockets
 import time
 
 # CONFIGURATION
-API_KEY = "PASTE_YOUR_AISSTREAM_KEY_HERE"
+API_KEY = "de4272bdc032841809eeab781800affe0e2f4770"
 BOUNDING_BOX = [[[34.33, -77.70], [34.38, -77.60]]]
 
 async def connect_ais():
