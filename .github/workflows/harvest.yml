@@ -9,7 +9,7 @@ jobs:
   run-script:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write  # This is the vital piece!
     steps:
     - name: Checkout repo code
       uses: actions/checkout@v3
