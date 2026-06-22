@@ -1,15 +1,8 @@
-name: Hourly Data Loop
-
-on:
-  schedule:
-    - cron: '0 * * * *'
-  workflow_dispatch:
-
 jobs:
   run-script:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # This is the vital piece!
+      contents: write  # This allows the script to create and save the CSV/HTML files
     steps:
     - name: Checkout repo code
       uses: actions/checkout@v3
@@ -26,5 +19,5 @@ jobs:
         git config --global user.name 'InletDataBot'
         git config --global user.email 'bot@inletdata.internal'
         git add vessel_tracks.csv index.html
-        git commit -m "Automated track log update" || exit 0
+        git commit -m "Automated update" || exit 0
         git push
