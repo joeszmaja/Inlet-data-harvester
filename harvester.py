@@ -1,61 +1,55 @@
-# Force-refresh: Starting clean
-import asyncio
-# ... (rest of your code)
-
 import asyncio
 import json
 import csv
 import os
-from datetime import datetime
 import websockets
 import time
 
 # CONFIGURATION
-API_KEY = "de4272bdc032841809eeab781800affe0e2f4770"
+API_KEY = "PASTE_YOUR_AISSTREAM_KEY_HERE"
 BOUNDING_BOX = [[[34.33, -77.70], [34.38, -77.60]]]
 
 async def connect_ais():
     url = "wss://stream.aisstream.io/v0/stream"
-    async with websockets.connect(url) as websocket:
-        subscribe_message = {
-            "APIKey": API_KEY,
-            "BoundingBoxes": BOUNDING_BOX,
-            "FilterMessageTypes": ["PositionReport"]
-        }
-        await websocket.send(json.dumps(subscribe_message))
+    filename = "vessel_tracks.csv"
+    
+    try:
+        async with websockets.connect(url) as websocket:
+            subscribe_message = {
+                "APIKey": API_KEY,
+                "BoundingBoxes": BOUNDING_BOX,
+                "FilterMessageTypes": ["PositionReport"]
+            }
+            await websocket.send(json.dumps(subscribe_message))
+            print("Connected. Collecting for 30 seconds...")
 
-        filename = "vessel_tracks.csv"
-        file_exists = os.path.isfile(filename)
-        
-        with open(filename, mode='a', newline='') as file:
-            writer = csv.writer(file)
-            if not file_exists:
-                writer.writerow(["MMSI", "Name", "Type", "Lat", "Lon", "Timestamp"])
+            file_exists = os.path.isfile(filename)
+            with open(filename, mode='a', newline='') as file:
+                writer = csv.writer(file)
+                if not file_exists:
+                    writer.writerow(["MMSI", "Name", "Type", "Lat", "Lon", "Timestamp"])
 
-            print("Connected. Collecting for 45 seconds...")
-            start_time = time.time()
-            
-            async for message in websocket:
-                # Timer to stop the harvester
-                if time.time() - start_time > 45:
-                    break
-                    
-                data = json.loads(message)
-                ship_type = data.get("MetaData", {}).get("ShipType", 0)
-                
-                # Filters for Tugs/Towboats (31, 32) and Pilots (50)
-                if ship_type in [31, 32, 50]:
-                    mmsi = data.get("MetaData", {}).get("MMSI")
-                    name = data.get("MetaData", {}).get("ShipName", "").strip()
-                    lat = data.get("Message", {}).get("PositionReport", {}).get("Latitude")
-                    lon = data.get("Message", {}).get("PositionReport", {}).get("Longitude")
-                    timestamp = data.get("MetaData", {}).get("time_utc")
-                    writer.writerow([mmsi, name, ship_type, lat, lon, timestamp])
-
-    generate_leaflet_map(filename)
+                # This timeout forces the loop to stop after 30 seconds
+                async with asyncio.timeout(30):
+                    async for message in websocket:
+                        data = json.loads(message)
+                        ship_type = data.get("MetaData", {}).get("ShipType", 0)
+                        
+                        if ship_type in [31, 32, 50]:
+                            mmsi = data.get("MetaData", {}).get("MMSI")
+                            name = data.get("MetaData", {}).get("ShipName", "").strip()
+                            lat = data.get("Message", {}).get("PositionReport", {}).get("Latitude")
+                            lon = data.get("Message", {}).get("PositionReport", {}).get("Longitude")
+                            timestamp = data.get("MetaData", {}).get("time_utc")
+                            writer.writerow([mmsi, name, ship_type, lat, lon, timestamp])
+                            
+    except Exception as e:
+        print(f"Finished: {e}")
+    finally:
+        # This runs automatically whether we succeeded or timed out
+        generate_leaflet_map(filename)
 
 def generate_leaflet_map(csv_filename):
-    # This keeps your map generator intact
     tracks_js = ""
     if os.path.isfile(csv_filename):
         with open(csv_filename, mode='r') as f:
@@ -87,12 +81,4 @@ def generate_leaflet_map(csv_filename):
         f.write(html_content)
 
 if __name__ == "__main__":
-    try:
-        # This will force the entire script to stop after 60 seconds, 
-        # even if the WebSocket is still hanging.
-        asyncio.run(asyncio.wait_for(connect_ais(), timeout=60))
-    except asyncio.TimeoutError:
-        print("Script reached hard time limit and forced exit.")
-        # This allows the script to continue to the map generation step
-        # instead of killing the entire process.
-        pass
+    asyncio.run(connect_ais())
